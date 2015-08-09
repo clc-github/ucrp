@@ -1,1 +1,5 @@
 *.o
+*.a
+*.so
+test-server/ucrp-server
+ucrpsh/ucrpsh
