@@ -1,0 +1,277 @@
+                                                         Chrisotpher L. Cousins
+                                                                          sparf
+                                                                      July 2003
+
+      Unsophisticated Command and Response Protocol - Version 1
+
+
+1. Introduction
+
+   Most common programming languages other than C don't have existing
+   command line editing libraries.  UCRP is simple protocol that
+   will allow a small and dumb cli client to interface with a
+   more intelligent cli server using a TCP socket.  The cli client
+   can take advantage of the many command line editing libraries
+   to provide a better user experience.
+
+2. Basic Operation
+
+   The UCRP server host listens for client connections on the local
+   UCRP TCP port.  When a client establishes a TCP connection with the
+   server, the server may start sending messages to the client and
+   the client may start sending messages to the server.  The server
+   and client then exchange UCRP messages until the TCP connection is
+   closed.
+
+3. Conventions
+
+3.1 Data Transmission Order
+    Message sections MUST be transmitted in network byte order.
+
+3.2 Size limits
+    Message sizes MUST be limited to 1500 bytes maximum.
+
+3.3 Strings
+    All strings are in ASCII format.
+
+4. Message Format
+   UCRP communication is handled by a single format called a message.
+   Each message consists of four distinct sections.
+
+   +---------+
+   | Type    |
+   +---------+
+   | Options |
+   +---------+
+   | Length  |
+   +---------+
+   | Payload |
+   +---------+
+
+   The 'Type' section is a 16 bit unsigned integer that specifies the
+   type of UCRP message.
+
+   The 'Options' section is a 16 bit unsigned integer that specifies
+   type specific options for the UCRP message.
+
+   The 'Length' section is a 16 bit unsigned integer that specifies the
+   length of the 'Payload' section.
+
+   The 'Payload' section is a variable length field of octets
+   containing the type specific payload for the UCRP message.
+
+4.1 Server Message Types
+    The UCRP server MAY send the following message types to a
+    client.
+
+4.1.1 UCRP_ASK
+      Value: 100
+      Options: ASK_NONE, ASK_NOECHO, ASK_FEEDBACK, ASK_CHAR
+      Length: Length of Payload
+      Payload: <prompt>\r\n<default>\r\n
+
+      This message is sent to the client for special dialog
+      such as password or yes/no prompting.  The client
+      MUST respond with a UCRP_TELL message.
+
+      The Payload MUST contain a <prompt> and a <default> 
+      separted by '\r\n'.
+
+      <prompt> is an ASCII string displayed to the user.
+      For example 'Password: '.
+
+      <default> is an ASCII string that will be the default
+      response in the corresponding UCRP_TELL message.
+      For example 'yes'.
+
+      ASK_NONE (0x0)
+        The client MUST echo the users input.
+
+      ASK_NOECHO (0x1)
+        The client MUST NOT echo the users input.
+
+      ASK_FEEDBACK (0x2)
+        The client MUST give the users feedback for
+        characters entered, implies ASK_NOECHO.
+
+        An example of this would be echoing asterisks
+        as the user enters characters.
+
+      ASK_CHAR (0x4)
+        The client MUST only accept a single character
+        of input.
+
+4.1.2 UCRP_BUSY 
+      Value: 101
+      Options: None (0x0)
+      Length: 0
+      Payload: None
+
+      Instructs the client that the server is busy.  The client
+      SHOULD display something to the user to let the user know
+      that the server is busy.
+
+4.1.3 UCRP_COMPLETED
+      Value: 102
+      Options: None (0x0)
+      Length: Length of Payload
+      Payload: <completed string>\r\n
+
+      MUST be sent in response to a UCRP_COMPLETE message.
+
+      NOTE: Zero or more UCRP_DISPLAY display message
+            MAY be sent after the UCRP_COMPLETE is
+            received, but before the UCRP_COMPLETED
+            message is sent.
+
+      The Payload MUST contain the completed command <string>
+      followed by '\r\n'.
+
+4.1.4 UCRP_DISPLAY
+      Value: 103
+      Options: None (0x0)
+      Length: Length of Payload
+      Payload: <formated string>
+
+      Used to display information to the user.  The client SHOULD
+      display the <formated string> to the user as it is received.
+
+      If ultiple UCRP_DISPLAY messages are received in a row, they
+      MUST be treated as a single <formated string> by the client.
+      
+      NOTE: The terminator '\r\n' is not required for this message
+            type.
+
+4.1.5 UCRP_PROMPT
+      Value: 104
+      Options: None (0x0)
+      Length: Length of Payload
+      Payload: <prompt>\r\n
+
+      Used to inform the client that it should prompt the user for
+      input to be sent to the server in a UCRP_COMMAND message.
+
+      The Payload MAY contain the <prompt> string to be displayed 
+      to the user.  If no <prompt> string is sent, the prompt is
+      displayed to the user is undefined.
+
+4.1.6 UCRP_HELPED
+      Value: 105
+      Options: None (0x0)
+      Length: 0
+      Payload: None
+
+      MUST be sent in response to a UCRP_HELP message.
+
+      NOTE: Zero or more UCRP_DISPLAY display message
+            MAY be sent after the UCRP_HELP is
+            received, but before the UCRP_HELPED
+            message is sent.
+
+4.1.6 UCRP_SWINSZ
+      Value: 106
+      Options: None (0x0)
+      Length: Length of Payload
+      Payload: <rows>\r\n<cols>\r\n<xpixel>\r\n<ypixel>\r\n
+
+      Used to set the window size associated with a non-graphical
+      client terminal.  Some clients may choose to ignore this
+      command.
+
+4.1.7 UCRP_EXEC
+      Value: 107
+      Options: None (0x0)
+      Length: Length of Payload
+      Payload: <command>\r\n
+
+      Used to execute a file with the ucrp client as its parent.
+      Some clients may choose to ignore this command.
+      Care should be taken to prevent sending a command to a client
+      that cannot execute it.  For example, you whould not want to
+      send the command 'vi /etc/group' to a graphical client.
+
+      The client MUST respond with a UCRP_WAIT message.
+
+      An example <command> would be 'ps -ax'.
+
+4.2 Client Message Types
+    The UCRP client MAY send the following message types to
+    the server.
+
+4.2.1 UCRP_COMMAND
+      Value: 200
+      Options: None (0x0)
+      Length: Length of Payload
+      Payload: <command>\r\n
+
+      This message is sent to the server for parsing and execution
+      of <command>.
+
+4.2.2 UCRP_COMPLETE
+      Value: 201
+      Options: None (0x0)
+      Length: Length of Payload
+      Payload: <string>\r\n
+
+      The message is set to the server as a partial command.  The
+      server MUST attempt to complete the command by sending
+      a UCRP_COMPLETED message.  If multiple commands match
+      <string>, the server SHOULD display all possible matches
+      by sending one or more UCRP_DISPLAY messages followed by
+      a single UCRP_COMPLETE message with the completed string.
+
+4.2.3 UCRP_HELP
+      Value: 202
+      Options: None (0x0)
+      Length: Length of Payload
+      Payload: <command>\r\n
+
+      This message is sent to the server to request help for the
+      command <command>.  The server SHOULD respond with one
+      or more UCRP_DISPLAY messages describing the command <command>.
+
+4.2.4 UCRP_INTERRUPT
+      Value: 203
+      Options: None (0x0)
+      Length: 0
+      Payload: None
+
+      Instructs the server to try and interrupt the current command.
+
+4.2.5 UCRP_TELL
+      Value: 204
+      Options: None (0x0)
+      Length: Length of Payload
+      Payload: <response>\r\n
+
+      This message is a response to an UCRP_ASK message from the server.
+      The Payload MUST contain a <response>.  If the user did not 
+      enter a valid response, the <default> string from the UCRP_ASK
+      message will be returned.
+
+4.2.6 UCRP_SUSPEND
+      Value: 205
+      Options: None (0x0)
+      Length: 0
+      Payload: None
+
+      Undefined.
+
+4.2.7 UCRP_WAIT
+      Value: 206
+      Options: WAIT_STATUS, WAIT_SIGNAL, WAIT_ERROR
+      Length: Length of Payload
+      Payload: <status>\r\n
+
+      MUST be sent in response to a UCRP_EXEC message.
+
+      WAIT_STATUS (0x1)
+        The payload will contain the exit status of the process.
+
+      WAIT_SIGNAL (0x2)
+        The process died due to receipt of a signal.
+        No Payload will be present.
+
+      WAIT_ERROR  (0x4)
+        The command in the last UCRP_EXEC message could not be executed.
+        No Payload will be present.

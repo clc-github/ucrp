@@ -1,0 +1,6 @@
+#!/bin/sh
+#
+# Setup shared libaray path, the exec arguments
+#
+export LD_LIBRARY_PATH=${PWD}/../lib
+exec ./${1+"$@"}
